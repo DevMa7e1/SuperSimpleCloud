@@ -9,20 +9,28 @@ if __name__ == "__main__":
     if not os.path.exists("./static"):
         os.mkdir("static")
         os.mkdir("static/files")
+        f = open("PASSWORD", 'w')
+        f.write("password")
+        f.close()
 
 f = open("sample.html")
 sample = f.read()
 f.close()
 
-def getFiles(folder = "files"):
+f = open("PASSWORD")
+password = f.read()
+f.close()
+
+def getFiles( folder = "files"):
+    global password
     files = os.listdir("./static/"+folder)
     retrn = ""
     for i in files:
         if os.path.isfile(f"./static/{folder}/{i}"):
-            retrn += f"<a href='/static/{folder}/{i}' download>"
+            retrn += f"<a href='/static/{folder}/{i}?passw={password}' download>"
             retrn += "<h2 style='color: white'>"
         else:
-            retrn += f"<a href='/{folder}|{i}'>"
+            retrn += f"<a href='/{folder.replace("/", "|")}{i}?passw={password}'>"
             retrn += "<h2 style='color: orange'>"
         retrn += f"{i}</h2>\n"
         retrn += "</a>"
@@ -32,15 +40,18 @@ def getFilesButDelete(folder = "files"):
     files = os.listdir("./static/"+folder)
     retrn = ""
     for i in files:
-        retrn += f"<a href='/delete/butfr/{folder.replace("/", "|")}|{i}'>"
+        retrn += f"<a href='/SuperSimpleFunctions/delete/butfr/{folder.replace("/", "|")}|{i}?passw={password}'>"
         retrn += "<h2 style='color: red'>"
         retrn += f"{i}</h2>\n"
         retrn += "</a>"
     return retrn
 
 @app.route("/", methods=["GET", "POST"])
-def online():
-    return f"{sample}<h1>Your cloud is online! This is root: /</h1>" + getFiles() + "<a href='/SuperSimpleFunctions/upload/files'><button>Upload here</button></a><a href='/delete/files'><button>Delete here</button></a>"
+def auth():
+    f = open('password.html')
+    r = f.read()
+    f.close()
+    return r
 @app.route("/SuperSimpleFunctions/upload/<path>")
 def upload(path : str):
     return """
@@ -81,7 +92,7 @@ function postFile() {
         }
     });   
 
-    request.open('post', '/"""+path+"""');
+    request.open('post', '/"""+path+"?passw="+password+"""');
     request.timeout = 45000;
     request.send(formdata);
 }
@@ -103,9 +114,9 @@ def navigate(folder : str):
     for i in folder.split("|"):
         path += i + "/"
     path.removesuffix("/")
-    if request.method == "GET":
-        return f"{sample}<h1>{path.removeprefix("files")}</h1>"+getFiles(path)+f"<a href='/delete/{path.replace("/", "|")}'><a href='/SuperSimpleFunctions/upload/{folder}'><button>Upload here</button></a><a href='/delete/{path.replace("/", "|")}'><button>Delete here</button></a>"
-    else: # request.method == 'POST':
+    if request.method == "GET" and request.args["passw"] == password:
+        return f"{sample}<h1>{path.removeprefix("files")}</h1>"+getFiles(path)+f"<a href='/SuperSimpleFunctions/delete/{path.replace("/", "|")}'><a href='/SuperSimpleFunctions/upload/{folder}?passw={password}'><button>Upload here</button></a><a href='/SuperSimpleFunctions/delete/{path.replace("/", "|")}?passw={password}'><button>Delete here</button></a>"
+    if request.method == 'POST':
         # check if the post request has the file part
         if 'file' not in request.files:
             return "File not sent!"
@@ -114,20 +125,24 @@ def navigate(folder : str):
         # empty file without a filename.
         if file.filename == '':
             return "No file selected!"
-        if file:
+        if file and request.args["passw"] == password:
             filename = file.filename
             file.save(f"./static/files{path.removeprefix("files")}"+str(filename))
             return "Yay file uploaded!"
-    return "idk? go ask the dev or smth..."
+    return "Wrong password i think"
 
-@app.route("/delete/butfr/<path>")
+@app.route("/SuperSimpleFunctions/delete/butfr/<path>")
 def deletebutfr(path : str):
-    os.remove("./static/"+path.replace("|", "/"))
-    return "File succesfully eliminated.<a href='/'><button>Go back to root</button></a>"
-@app.route("/delete/<path>")
+    if request.args["passw"] == password:
+        os.remove("./static/"+path.replace("|", "/"))
+        return "File succesfully eliminated.<a href='/'><button>Go back to root</button></a>"
+    return "Wrong password i think"
+@app.route("/SuperSimpleFunctions/delete/<path>")
 def delete(path : str):
-    path = path.replace("|", "/").removesuffix("/")
-    return f"{sample}<h1>What file to delete from {"/"+path.removeprefix("files").removeprefix("/")}?</h1>{getFilesButDelete(path)}"
+    if request.args["passw"] == password:
+        path = path.replace("|", "/").removesuffix("/")
+        return f"{sample}<h1>What file to delete from {"/"+path.removeprefix("files").removeprefix("/")}?</h1>{getFilesButDelete(path)}"
+    return "Wrong password i think"
 
 
 app.run("0.0.0.0", 12345, debug=True)
