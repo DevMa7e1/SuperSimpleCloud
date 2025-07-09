@@ -183,3 +183,4 @@ cython_debug/
 # SuperSimpleCloud stuff
 static/files
 PASSWORD
+setup.txt
