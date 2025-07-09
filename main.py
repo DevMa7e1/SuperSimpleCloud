@@ -44,7 +44,7 @@ def setupRecoveryFile(file):
     z.close()
 def recoverFile(file):
     global configs
-    rcs = reedsolo.RSCodec(100)
+    rcs = reedsolo.RSCodec(int(configs["reedsolo"][0]))
     x = open(file, "rb")
     z = open(file+".reso", 'rb')
     y = z.read()
