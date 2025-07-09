@@ -13,6 +13,7 @@ if __name__ == "__main__":
         f.write("password")
         f.close()
 
+
 f = open("sample.html")
 sample = f.read()
 f.close()
@@ -67,6 +68,13 @@ def upload(path : str):
     width:0%;
     padding:5px 0px 5px 0px;
 }
+input, button{
+	font-size: 45px;
+}
+button{
+    background-color: lightblue;
+    border-radius: 25px;
+}
 </style>
 <script>
 function postFile() {
@@ -98,14 +106,18 @@ function postFile() {
 }
 </script>
 </head>
+<div style='border-width: 5px;border-style: solid;border-radius: 30px;background: cornflowerblue;height: 352px;width: 550px;'>
+<br>
 <form id="form1">
     <input id="file1" type="file" />
     <div class="progress-wrapper">
         <div id="progress-bar-file1" class="progress"></div>
     </div>
+    <br>
     <button type="button" onclick="postFile()">Upload File</button>
 </form>
-<a href='/'><button>Go back to root</button>
+<br><br><br><br><br><br>
+<a href='/'><button>Go back to root</button></div>
 </html>
 """
 @app.route("/<folder>", methods = ["GET", "POST"])
@@ -115,14 +127,11 @@ def navigate(folder : str):
         path += i + "/"
     path.removesuffix("/")
     if request.method == "GET" and request.args["passw"] == password:
-        return f"{sample}<h1>{path.removeprefix("files")}</h1>"+getFiles(path)+f"<a href='/SuperSimpleFunctions/delete/{path.replace("/", "|")}'><a href='/SuperSimpleFunctions/upload/{folder}?passw={password}'><button>Upload here</button></a><a href='/SuperSimpleFunctions/delete/{path.replace("/", "|")}?passw={password}'><button>Delete here</button></a>"
+        return f"{sample}<div class='mmmm' width=500><h1>{path.removeprefix("files")}</h1>"+getFiles(path)+f"<a href='/SuperSimpleFunctions/delete/{path.replace("/", "|")}'><a href='/SuperSimpleFunctions/upload/{folder}?passw={password}'><button>Upload here</button></a><a href='/SuperSimpleFunctions/delete/{path.replace("/", "|")}?passw={password}'><button>Delete here</button></a></div>"
     if request.method == 'POST':
-        # check if the post request has the file part
         if 'file' not in request.files:
             return "File not sent!"
         file = request.files['file']
-        # If the user does not select a file, the browser submits an
-        # empty file without a filename.
         if file.filename == '':
             return "No file selected!"
         if file and request.args["passw"] == password:
