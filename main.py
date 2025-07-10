@@ -13,9 +13,9 @@ if __name__ == "__main__":
         f.write("password")
         f.close()
         f = open("setup.txt", 'w')
-        f.write("""reedsolo: 32,.
+        f.write("""reedsolo: 32
 autorecover: 1
-autobackup: 0,.""")
+autobackup: 0""")
         f.close()
 
 
@@ -42,18 +42,24 @@ def readChunks(file, chunk_size=255-int(configs["reedsolo"][0])):
     i = 0
     while True:
         chunk = f.read(chunk_size)
+        print(f"Reading chunk {str(i)} of file {file}", end="\r")
         i += 1
         if not chunk:
             break
         chunks.append(chunk)
     f.close()
+    print()
     return chunks
 def ReedEncode(chunks):
     global configs
     rcs = reedsolo.RSCodec(int(configs["reedsolo"][0]))
     reeds = []
+    i = 0
     for chunk in chunks:
+        print(f"Encoding chunk {i}.", end="\r")
+        i += 1
         reeds.append(rcs.encode(chunk)[len(chunk):])
+    print()
     return reeds
 def ReedDecode(reeds, chunks):
     global configs
@@ -62,6 +68,7 @@ def ReedDecode(reeds, chunks):
     recovered = 0
     broken = 0
     for i in range(len(reeds)):
+        print(f"Decoding chunk {i}.", end="\r")
         try:
             corrects.append(rcs.decode(chunks[i]+reeds[i]))
             recovered += 1
@@ -70,6 +77,7 @@ def ReedDecode(reeds, chunks):
     correct = b""
     for i in corrects:
         correct += i[0]
+    print()
     return correct, recovered, broken
 
 def backupFile(file):
@@ -148,6 +156,19 @@ def getFilesButSetupBackup(folder = "files"):
             retrn += f"{i}</h2>\n"
             retrn += "</a>"
     return retrn
+def getFilesButRename(folder = "files"):
+    files = os.listdir("./static/"+folder)
+    retrn = ""
+    for i in files:
+        if os.path.isfile(f"./static/{folder}/{i}"):
+            retrn += f"<a href='/SuperSimpleFunctions/rename/interface/{folder.replace("/", "|")}|{i}?passw={password}'>"
+            retrn += "<h2 style='color: white'>"
+            retrn += f"{i}</h2>\n"
+            retrn += "</a>"
+    return retrn
+
+def renameFile(path, path2):
+    os.rename(path, path2)
 
 @app.route("/", methods=["GET", "POST"])
 def auth():
@@ -229,7 +250,7 @@ def navigate(folder : str):
         path += i + "/"
     path.removesuffix("/")
     if request.method == "GET" and request.args["passw"] == password:
-        return f"{sample}<div class='mmmm'><h1>{path.removeprefix("files")}</h1>"+getFiles(path)+f"<a href='/SuperSimpleFunctions/upload/{folder}?passw={password}'><button>Upload here</button></a><a href='/SuperSimpleFunctions/delete/{path.replace("/", "|")}?passw={password}'><button>Delete here</button></a><a href='/SuperSimpleFunctions/setuprecovery/{path.removesuffix("/").replace("/", "|")}?passw={password}'><button>Set up recovery here</button></a><a href='/SuperSimpleFunctions/backup/{path.removesuffix("/").replace("/", "|")}?passw={password}'><button>Make a backup here</button></a></div>"
+        return f"{sample}<div class='mmmm'><h1>{path.removeprefix("files")}</h1>"+getFiles(path)+f"<a href='/SuperSimpleFunctions/upload/{folder}?passw={password}'><button>Upload here</button></a><a href='/SuperSimpleFunctions/delete/{path.replace("/", "|")}?passw={password}'><button>Delete here</button></a><a href='/SuperSimpleFunctions/setuprecovery/{path.removesuffix("/").replace("/", "|")}?passw={password}'><button>Set up recovery here</button></a><a href='/SuperSimpleFunctions/backup/{path.removesuffix("/").replace("/", "|")}?passw={password}'><button>Make a backup here</button></a><a href='/SuperSimpleFunctions/rename/{path.removesuffix("/").replace("/", "|")}?passw={password}'><button>Rename here</button></a><a href='/SuperSimpleFunctions/mkdir/{path.removesuffix("/").replace("/", "|")}?passw={password}'><button>New folder here</button></a></div>"
     if request.method == 'POST':
         if 'file' not in request.files:
             return "File not sent!"
@@ -239,13 +260,20 @@ def navigate(folder : str):
         if file and request.args["passw"] == password:
             filename = file.filename
             file.save(f"./static/files{path.removeprefix("files")}"+str(filename))
+            if(configs["autobackup"][0] == "1"):
+                backupFile(f"./static/files{path.removeprefix("files")}"+str(filename))
+            if(configs["autorecover"][0] == "1"):
+                setupRecoveryFile(f"./static/files{path.removeprefix("files")}"+str(filename))
             return "Yay file uploaded!"
     return "Wrong password i think"
 
 @app.route("/SuperSimpleFunctions/delete/butfr/<path>")
 def deletebutfr(path : str):
     if request.args["passw"] == password:
-        os.remove("./static/"+path.replace("|", "/"))
+        if os.path.isfile("./static/"+path.replace("|", "/")):
+            os.remove("./static/"+path.replace("|", "/"))
+        else:
+            os.rmdir("./static/"+path.replace("|", "/"))
         return "File succesfully eliminated.<a href='/'><button>Go back to root</button></a>"
     return "Wrong password i think"
 @app.route("/SuperSimpleFunctions/delete/<path>")
@@ -315,5 +343,109 @@ def downbackup(folder):
         else:
             return send_file("./static/"+path, download_name=i.split(".")[:len(i.split("."))-2][0]+"."+i.split(".")[:len(i.split("."))-2][1], as_attachment=True)
     return "Wrong password i think"
-
+@app.route("/SuperSimpleFunctions/rename/<folder>", methods = ["GET"])
+def renam(folder):
+    path = ""
+    for i in folder.split("|"):
+        path += i + "/"
+    path = path.removesuffix("/")
+    if request.method == "GET" and request.args["passw"] == password:
+        return sample+"<div class='mmmm' width=500><h1>"+getFilesButRename(path)+"</div>"
+    return "Wrong password i think"
+@app.route("/SuperSimpleFunctions/rename/interface/<folder>", methods = ["GET"])
+def renamee(folder):
+    path = ""
+    for i in folder.split("|"):
+        path += i + "/"
+    path = path.removesuffix("/")
+    i = path.split("/")[len(path.split("/"))-1]
+    if request.method == "GET" and request.args["passw"] == password:
+        return """<!DOCTYPE html>
+<html><head>
+<style>
+    input, label{
+        font-size: 30px;
+        font-family: 'Lucida Sans', 'Lucida Sans Regular', 'Lucida Grande', 'Lucida Sans Unicode', Geneva, Verdana, sans-serif;
+    }
+    .psswd{
+        border-width: 5px;
+        border-style: solid;
+        border-radius: 30px;
+        width: 450px;
+        background-color: cornflowerblue;
+    }
+</style>
+</head>
+<body>
+<div class="psswd">
+    <br>
+<form action="/SuperSimpleFunctions/rename/fr/"""+folder+"""?passw=password">
+  <label for="passw">New file name:</label><br>
+  <input type="text" id="name" name="name" value=""><br><br>
+  <label for="passw">Password to the cloud:</label><br>
+  <input type="password" id="passw" name="passw" value=""><br><br>
+  <input type="submit" value="Ok">
+</form><br></div>
+</body>
+</html>"""
+    return "Wrong password i think"
+@app.route("/SuperSimpleFunctions/rename/fr/<folder>", methods = ["GET"])
+def renamefr(folder):
+    path = ""
+    for i in folder.split("|"):
+        path += i + "/"
+    path = "./static/"+path.removesuffix("/")
+    if request.method == "GET" and request.args["passw"] == password:
+        newpath = ""
+        for j in path.split("/")[:len(path.split("/"))-1]:
+            newpath += j + "/"
+        renameFile(path, newpath+request.args["name"])
+        return "Renamed👍"
+    return "Wrong password i think"
+@app.route("/SuperSimpleFunctions/mkdir/<folder>", methods = ["GET"])
+def mkdir(folder):
+    path = ""
+    for i in folder.split("|"):
+        path += i + "/"
+    path = path.removesuffix("/")
+    if request.method == "GET" and request.args["passw"] == password:
+        return """<!DOCTYPE html>
+<html><head>
+<style>
+    input, label{
+        font-size: 30px;
+        font-family: 'Lucida Sans', 'Lucida Sans Regular', 'Lucida Grande', 'Lucida Sans Unicode', Geneva, Verdana, sans-serif;
+    }
+    .psswd{
+        border-width: 5px;
+        border-style: solid;
+        border-radius: 30px;
+        width: 450px;
+        background-color: cornflowerblue;
+    }
+</style>
+</head>
+<body>
+<div class="psswd">
+    <br>
+<form action="/SuperSimpleFunctions/mkdir/fr/"""+folder+"""">
+  <label for="passw">Folder name:</label><br>
+  <input type="text" id="name" name="name" value=""><br><br>
+  <label for="passw">Password to the cloud:</label><br>
+  <input type="password" id="passw" name="passw" value=""><br><br>
+  <input type="submit" value="Ok">
+</form><br></div>
+</body>
+</html>"""
+    return "Wrong password i think"
+@app.route("/SuperSimpleFunctions/mkdir/fr/<folder>", methods = ["GET"])
+def mkdirfr(folder):
+    path = ""
+    for i in folder.split("|"):
+        path += i + "/"
+    path = path.removesuffix("/")
+    if request.method == "GET" and request.args["passw"] == password:
+        os.mkdir("./static/"+path+"/"+request.args["name"])
+        return "New folder created👍"
+    return "Wrong password i think"
 app.run("0.0.0.0", 12345, debug=True)
