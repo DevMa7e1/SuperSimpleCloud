@@ -1,5 +1,6 @@
 from flask import Flask, request, send_file
 import os, reedsolo, time
+from Crypto.Cipher import AES
 
 app = Flask(__name__)
 
@@ -35,6 +36,32 @@ configs = {}
 for i in cffg.split("\n"):
     configs[i.split(":")[0]] = i.split(":")[1].split(",")
 
+def padKey(key : str):
+    for i in range(len(key), 16):
+        key += " "
+    return key
+def AESEncrypt(data : bytes, key : str):
+    aes = AES.new(padKey(key).encode(), AES.MODE_EAX)
+    return aes.encrypt(data)
+def AESDecrypt(gibb : bytes, key : str):
+    aes = AES.new(padKey(key).encode(), AES.MODE_EAX)
+    return aes.decrypt(gibb)
+def fileAESEncrypt(file, key):
+    f = open(file, 'rb')
+    r = AESEncrypt(f.read(), key)
+    f.close()
+    f = open(file+".naes", 'wb')
+    f.write(r)
+    f.close()
+def fileAESDecrypt(file, key):
+    f = open(file+".naes", 'rb')
+    r = AESEncrypt(f.read(), key)
+    f.close()
+    f = open("./static/temp", 'wb')
+    f.write(r)
+    f.close()
+    return send_file("./static/temp", download_name=file, as_attachment=True)
+
 def readChunks(file, chunk_size=255-int(configs["reedsolo"][0])):
     global configs
     f = open(file, 'rb')
@@ -67,16 +94,15 @@ def ReedDecode(reeds, chunks):
     corrects = []
     recovered = 0
     broken = 0
+    correct = b""
     for i in range(len(reeds)):
         print(f"Decoding chunk {i}.", end="\r")
         try:
-            corrects.append(rcs.decode(chunks[i]+reeds[i]))
+            correct += rcs.decode(chunks[i]+reeds[i])[0]
             recovered += 1
         except Exception as e:
             broken += 1
-    correct = b""
-    for i in corrects:
-        correct += i[0]
+            correct += chunks[i]
     print()
     return correct, recovered, broken
 
@@ -91,10 +117,14 @@ def setupRecoveryFile(file):
     global configs
     z = open(file+".reso", 'wb')
     bstr = b""
+    j = 0
     for i in ReedEncode(readChunks(file)):
+        print(f"Saving chunk {str(j)} of file {file}.", end="\r")
+        j += 1
         bstr += i
     z.write(bstr)
     z.close()
+    print()
 def recoverFile(file):
     global configs
     vars = ReedDecode(readChunks(file+".reso", int(configs["reedsolo"][0])), readChunks(file))
@@ -111,19 +141,27 @@ def getFiles( folder = "files"):
     retrn = ""
     for i in files:
         if os.path.isfile(f"./static/{folder}/{i}"):
-            if i.split('.')[len(i.split("."))-1] != "reso" and i.split('.')[len(i.split("."))-1] != "back":
+            if i.split('.')[len(i.split("."))-1] != "reso" and i.split('.')[len(i.split("."))-1] != "back" and i.split('.')[len(i.split("."))-1] != "naes":
                 retrn += f"<a href='/static/{folder}/{i}?passw={password}' download>"
                 retrn += "<h2 style='color: white'>"
+                retrn += f"{i}</h2>\n"
+            elif i.split('.')[len(i.split("."))-1] == "naes":
+                retrn += f"<a href='/SuperSimpleFunctions/AES/decrypt_interface/{folder.replace("/", "|")}{i.replace("/", "|").replace(".naes", '')}?passw={password}'>"
+                retrn += "<h2 style='color: lime'>"
+                retrn += f"{i.replace(".naes", "")}</h2>\n"
             elif i.split('.')[len(i.split("."))-1] == "reso":
                 retrn += f"<a href='/SuperSimpleFunctions/recovery/{folder.replace("/", "|")}{i.replace(".reso", '')}?passw={password}'>"
                 retrn += "<h2 style='color: lightblue'>"
+                retrn += f"{i.replace(".reso", "")}</h2>\n"
             elif i.split('.')[len(i.split("."))-1] == "back":
                 retrn += f"<a href='/SuperSimpleFunctions/downloadbackup/{folder.replace("/", "|")}{i.replace("/", "|")}?passw={password}' download>"
                 retrn += "<h2 style='color: lightgray'>"
+                retrn += f"{i.replace(".back", "")}</h2>\n"
+            
         else:
             retrn += f"<a href='/{folder.replace("/", "|")}{i}?passw={password}'>"
-            retrn += "<h2 style='color: orange'>"
-        retrn += f"{i}</h2>\n"
+            retrn += f"<h2 style='color: orange'>{i}</h2>"
+        
         retrn += "</a>"
     return retrn
 
@@ -163,6 +201,16 @@ def getFilesButRename(folder = "files"):
         if os.path.isfile(f"./static/{folder}/{i}"):
             retrn += f"<a href='/SuperSimpleFunctions/rename/interface/{folder.replace("/", "|")}|{i}?passw={password}'>"
             retrn += "<h2 style='color: white'>"
+            retrn += f"{i}</h2>\n"
+            retrn += "</a>"
+    return retrn
+def getFilesButEncrypt(folder = "files"):
+    files = os.listdir("./static/"+folder)
+    retrn = ""
+    for i in files:
+        if os.path.isfile(f"./static/{folder}/{i}"):
+            retrn += f"<a href='/SuperSimpleFunctions/AES/encrypt_interface/{folder.replace("/", "|")}|{i}?passw={password}'>"
+            retrn += "<h2 style='color: green'>"
             retrn += f"{i}</h2>\n"
             retrn += "</a>"
     return retrn
@@ -250,7 +298,7 @@ def navigate(folder : str):
         path += i + "/"
     path.removesuffix("/")
     if request.method == "GET" and request.args["passw"] == password:
-        return f"{sample}<div class='mmmm'><h1>{path.removeprefix("files")}</h1>"+getFiles(path)+f"<a href='/SuperSimpleFunctions/upload/{folder}?passw={password}'><button>Upload here</button></a><a href='/SuperSimpleFunctions/delete/{path.replace("/", "|")}?passw={password}'><button>Delete here</button></a><a href='/SuperSimpleFunctions/setuprecovery/{path.removesuffix("/").replace("/", "|")}?passw={password}'><button>Set up recovery here</button></a><a href='/SuperSimpleFunctions/backup/{path.removesuffix("/").replace("/", "|")}?passw={password}'><button>Make a backup here</button></a><a href='/SuperSimpleFunctions/rename/{path.removesuffix("/").replace("/", "|")}?passw={password}'><button>Rename here</button></a><a href='/SuperSimpleFunctions/mkdir/{path.removesuffix("/").replace("/", "|")}?passw={password}'><button>New folder here</button></a></div>"
+        return f"{sample}<div class='mmmm'><h1>{path.removeprefix("files")}</h1>"+getFiles(path)+f"<a href='/SuperSimpleFunctions/upload/{folder}?passw={password}'><button>Upload here</button></a><a href='/SuperSimpleFunctions/delete/{path.replace("/", "|")}?passw={password}'><button>Delete here</button></a><a href='/SuperSimpleFunctions/setuprecovery/{path.removesuffix("/").replace("/", "|")}?passw={password}'><button>Set up recovery here</button></a><a href='/SuperSimpleFunctions/backup/{path.removesuffix("/").replace("/", "|")}?passw={password}'><button>Make a backup here</button></a><a href='/SuperSimpleFunctions/rename/{path.removesuffix("/").replace("/", "|")}?passw={password}'><button>Rename here</button></a><a href='/SuperSimpleFunctions/mkdir/{path.removesuffix("/").replace("/", "|")}?passw={password}'><button>New folder here</button></a><a href='/SuperSimpleFunctions/AES/interface/{path.removesuffix("/").replace("/", "|")}?passw={password}'><button>Encrypt here</button></a></div>"
     if request.method == 'POST':
         if 'file' not in request.files:
             return "File not sent!"
@@ -447,5 +495,105 @@ def mkdirfr(folder):
     if request.method == "GET" and request.args["passw"] == password:
         os.mkdir("./static/"+path+"/"+request.args["name"])
         return "New folder created👍"
+    return "Wrong password i think"
+@app.route("/SuperSimpleFunctions/AES/interface/<folder>", methods = ["GET"])
+def aesinterface(folder):
+    path = ""
+    for i in folder.split("|"):
+        path += i + "/"
+    path = path.removesuffix("/")
+    if request.method == "GET" and request.args["passw"] == password:
+        return sample+"<div class='mmmm' width=500><h1>"+getFilesButEncrypt(path)+"</div>"
+    return "Wrong password i think"
+@app.route("/SuperSimpleFunctions/AES/encrypt_interface/<folder>", methods = ["GET"])
+def aesencrypt(folder):
+    path = ""
+    for i in folder.split("|"):
+        path += i + "/"
+    path = path.removesuffix("/")
+    if request.method == "GET" and request.args["passw"] == password:
+        return """<!DOCTYPE html>
+<html><head>
+<style>
+    input, label{
+        font-size: 30px;
+        font-family: 'Lucida Sans', 'Lucida Sans Regular', 'Lucida Grande', 'Lucida Sans Unicode', Geneva, Verdana, sans-serif;
+    }
+    .psswd{
+        border-width: 5px;
+        border-style: solid;
+        border-radius: 30px;
+        width: 450px;
+        background-color: cornflowerblue;
+    }
+</style>
+</head>
+<body>
+<div class="psswd">
+    <br>
+<form action="/SuperSimpleFunctions/AES/encrypt/"""+folder+"""">
+  <label for="passw">Encryption password:</label><br>
+  <input type="password" id="key" name="key" value="" maxlength="16"><br><br>
+  <label for="passw">Password to the cloud:</label><br>
+  <input type="password" id="passw" name="passw" value=""><br><br>
+  <input type="submit" value="Ok">
+</form><br></div>
+</body>
+</html>"""
+    return "Wrong password i think"
+@app.route("/SuperSimpleFunctions/AES/encrypt/<folder>", methods = ["GET"])
+def aesencrypty(folder):
+    path = ""
+    for i in folder.split("|"):
+        path += i + "/"
+    path = path.removesuffix("/")
+    if request.method == "GET" and request.args["passw"] == password:
+        fileAESEncrypt("./static/"+path, request.args["key"])
+        return "File encrypted👍"
+    return "Wrong password i think"
+@app.route("/SuperSimpleFunctions/AES/decrypt_interface/<folder>", methods = ["GET"])
+def aesdecrypt(folder):
+    path = ""
+    for i in folder.split("|"):
+        path += i + "/"
+    path = path.removesuffix("/")
+    if request.method == "GET" and request.args["passw"] == password:
+        return """<!DOCTYPE html>
+<html><head>
+<style>
+    input, label{
+        font-size: 30px;
+        font-family: 'Lucida Sans', 'Lucida Sans Regular', 'Lucida Grande', 'Lucida Sans Unicode', Geneva, Verdana, sans-serif;
+    }
+    .psswd{
+        border-width: 5px;
+        border-style: solid;
+        border-radius: 30px;
+        width: 450px;
+        background-color: cornflowerblue;
+    }
+</style>
+</head>
+<body>
+<div class="psswd">
+    <br>
+<form action="/SuperSimpleFunctions/AES/decrypt/"""+folder+"""">
+  <label for="passw">Encryption password:</label><br>
+  <input type="password" id="key" name="key" value="" maxlength="16"><br><br>
+  <label for="passw">Password to the cloud:</label><br>
+  <input type="password" id="passw" name="passw" value=""><br><br>
+  <input type="submit" value="Ok">
+</form><br></div>
+</body>
+</html>"""
+    return "Wrong password i think"
+@app.route("/SuperSimpleFunctions/AES/decrypt/<folder>", methods = ["GET"])
+def aesdecrypty(folder):
+    path = ""
+    for i in folder.split("|"):
+        path += i + "/"
+    path = path.removesuffix("/")
+    if request.method == "GET" and request.args["passw"] == password:
+        return fileAESDecrypt("./static/"+path, request.args["key"])
     return "Wrong password i think"
 app.run("0.0.0.0", 12345, debug=True)
