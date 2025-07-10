@@ -13,7 +13,7 @@ if __name__ == "__main__":
         f.write("password")
         f.close()
         f = open("setup.txt", 'w')
-        f.write("reedsolo: 20,.")
+        f.write("reedsolo: 32,.")
         f.close()
 
 
@@ -33,25 +33,60 @@ configs = {}
 for i in cffg.split("\n"):
     configs[i.split(":")[0]] = i.split(":")[1].split(",")
 
-def setupRecoveryFile(file):
+def readChunks(file, chunk_size=255-int(configs["reedsolo"][0])):
+    global configs
+    f = open(file, 'rb')
+    chunks = []
+    i = 0
+    while True:
+        chunk = f.read(chunk_size)
+        i += 1
+        if not chunk:
+            break
+        chunks.append(chunk)
+    f.close()
+    return chunks
+def ReedEncode(chunks):
     global configs
     rcs = reedsolo.RSCodec(int(configs["reedsolo"][0]))
-    x = open(file, "rb")
-    y = x.read()
-    x.close()
+    reeds = []
+    for chunk in chunks:
+        reeds.append(rcs.encode(chunk)[len(chunk):])
+    return reeds
+def ReedDecode(reeds, chunks):
+    global configs
+    rcs = reedsolo.RSCodec(int(configs["reedsolo"][0]))
+    corrects = []
+    recovered = 0
+    broken = 0
+    for i in range(len(reeds)):
+        try:
+            corrects.append(rcs.decode(chunks[i]+reeds[i]))
+            recovered += 1
+        except Exception as e:
+            broken += 1
+    correct = b""
+    for i in corrects:
+        correct += i[0]
+    return correct, recovered, broken
+
+def setupRecoveryFile(file):
+    global configs
     z = open(file+".reso", 'wb')
-    z.write(rcs.encode(y)[len(y):])
+    bstr = b""
+    for i in ReedEncode(readChunks(file)):
+        bstr += i
+    z.write(bstr)
     z.close()
 def recoverFile(file):
     global configs
-    rcs = reedsolo.RSCodec(int(configs["reedsolo"][0]))
-    x = open(file, "rb")
-    z = open(file+".reso", 'rb')
-    y = z.read()
-    recovery = rcs.decode(x.read()+y)[0]
-    x.close()
-    x = open(file, "wb")
-    x.write(recovery)
+    vars = ReedDecode(readChunks(file+".reso", int(configs["reedsolo"][0])), readChunks(file))
+    recovery = vars[0]
+    if recovery != "":
+        x = open(file, "wb")
+        x.write(recovery)
+        x.close()
+    return vars[1], vars[2]
 
 def getFiles( folder = "files"):
     global password
@@ -61,9 +96,10 @@ def getFiles( folder = "files"):
         if os.path.isfile(f"./static/{folder}/{i}"):
             if i.split('.')[len(i.split("."))-1] != "reso":
                 retrn += f"<a href='/static/{folder}/{i}?passw={password}' download>"
+                retrn += "<h2 style='color: white'>"
             else:
                 retrn += f"<a href='/SuperSimpleFunctions/recovery/{folder.replace("/", "|")}{i.replace(".reso", '')}?passw={password}'>"
-            retrn += "<h2 style='color: white'>"
+                retrn += "<h2 style='color: lightblue'>"
         else:
             retrn += f"<a href='/{folder.replace("/", "|")}{i}?passw={password}'>"
             retrn += "<h2 style='color: orange'>"
@@ -222,9 +258,9 @@ def recovery(folder):
         path += i + "/"
     path = path.removesuffix("/")
     if request.method == "GET" and request.args["passw"] == password:
-        recoverFile("./static/"+path)
-        return "Hope your file's fine! File recovered!"
-    return "...nothing... File not recovered... sadly. Please check server logs for more details!"
+        results = recoverFile("./static/"+path)
+        return f"I tried to recover your file! Chunks recovered: {int(results[0])} Broken chunks: {int(results[1])}"
+    return "Wrong password i think"
 
 
 app.run("0.0.0.0", 12345, debug=True)
