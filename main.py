@@ -1,5 +1,5 @@
-from flask import Flask, request
-import os, reedsolo
+from flask import Flask, request, send_file
+import os, reedsolo, time
 
 app = Flask(__name__)
 
@@ -13,7 +13,9 @@ if __name__ == "__main__":
         f.write("password")
         f.close()
         f = open("setup.txt", 'w')
-        f.write("reedsolo: 32,.")
+        f.write("""reedsolo: 32,.
+autorecover: 1
+autobackup: 0,.""")
         f.close()
 
 
@@ -70,6 +72,13 @@ def ReedDecode(reeds, chunks):
         correct += i[0]
     return correct, recovered, broken
 
+def backupFile(file):
+    a = open(file, 'rb')
+    b = open(file+f".{str(round(time.time()))}.back", 'wb')
+    b.write(a.read())
+    a.close()
+    b.close()
+
 def setupRecoveryFile(file):
     global configs
     z = open(file+".reso", 'wb')
@@ -94,12 +103,15 @@ def getFiles( folder = "files"):
     retrn = ""
     for i in files:
         if os.path.isfile(f"./static/{folder}/{i}"):
-            if i.split('.')[len(i.split("."))-1] != "reso":
+            if i.split('.')[len(i.split("."))-1] != "reso" and i.split('.')[len(i.split("."))-1] != "back":
                 retrn += f"<a href='/static/{folder}/{i}?passw={password}' download>"
                 retrn += "<h2 style='color: white'>"
-            else:
+            elif i.split('.')[len(i.split("."))-1] == "reso":
                 retrn += f"<a href='/SuperSimpleFunctions/recovery/{folder.replace("/", "|")}{i.replace(".reso", '')}?passw={password}'>"
                 retrn += "<h2 style='color: lightblue'>"
+            elif i.split('.')[len(i.split("."))-1] == "back":
+                retrn += f"<a href='/SuperSimpleFunctions/downloadbackup/{folder.replace("/", "|")}{i.replace("/", "|")}?passw={password}' download>"
+                retrn += "<h2 style='color: lightgray'>"
         else:
             retrn += f"<a href='/{folder.replace("/", "|")}{i}?passw={password}'>"
             retrn += "<h2 style='color: orange'>"
@@ -123,6 +135,16 @@ def getFilesButSetupRecovery(folder = "files"):
         if os.path.isfile(f"./static/{folder}/{i}"):
             retrn += f"<a href='/SuperSimpleFunctions/setuprecovery/butfr/{folder.replace("/", "|")}|{i}?passw={password}'>"
             retrn += "<h2 style='color: lightblue'>"
+            retrn += f"{i}</h2>\n"
+            retrn += "</a>"
+    return retrn
+def getFilesButSetupBackup(folder = "files"):
+    files = os.listdir("./static/"+folder)
+    retrn = ""
+    for i in files:
+        if os.path.isfile(f"./static/{folder}/{i}"):
+            retrn += f"<a href='/SuperSimpleFunctions/backup/butfr/{folder.replace("/", "|")}|{i}?passw={password}'>"
+            retrn += "<h2 style='color: yellow'>"
             retrn += f"{i}</h2>\n"
             retrn += "</a>"
     return retrn
@@ -207,7 +229,7 @@ def navigate(folder : str):
         path += i + "/"
     path.removesuffix("/")
     if request.method == "GET" and request.args["passw"] == password:
-        return f"{sample}<div class='mmmm'><h1>{path.removeprefix("files")}</h1>"+getFiles(path)+f"<a href='/SuperSimpleFunctions/upload/{folder}?passw={password}'><button>Upload here</button></a><a href='/SuperSimpleFunctions/delete/{path.replace("/", "|")}?passw={password}'><button>Delete here</button></a><a href='/SuperSimpleFunctions/setuprecovery/{path.removesuffix("/").replace("/", "|")}?passw={password}'><button>Set up recovery here</button></a></div>"
+        return f"{sample}<div class='mmmm'><h1>{path.removeprefix("files")}</h1>"+getFiles(path)+f"<a href='/SuperSimpleFunctions/upload/{folder}?passw={password}'><button>Upload here</button></a><a href='/SuperSimpleFunctions/delete/{path.replace("/", "|")}?passw={password}'><button>Delete here</button></a><a href='/SuperSimpleFunctions/setuprecovery/{path.removesuffix("/").replace("/", "|")}?passw={password}'><button>Set up recovery here</button></a><a href='/SuperSimpleFunctions/backup/{path.removesuffix("/").replace("/", "|")}?passw={password}'><button>Make a backup here</button></a></div>"
     if request.method == 'POST':
         if 'file' not in request.files:
             return "File not sent!"
@@ -261,6 +283,37 @@ def recovery(folder):
         results = recoverFile("./static/"+path)
         return f"I tried to recover your file! Chunks recovered: {int(results[0])} Broken chunks: {int(results[1])}"
     return "Wrong password i think"
-
+@app.route("/SuperSimpleFunctions/backup/<folder>", methods = ["GET"])
+def backup(folder):
+    path = ""
+    for i in folder.split("|"):
+        path += i + "/"
+    path = path.removesuffix("/")
+    if request.method == "GET" and request.args["passw"] == password:
+        return sample+"<div class='mmmm' width=500><h1>"+getFilesButSetupBackup(path)+"</div>"
+    return "Wrong password i think"
+@app.route("/SuperSimpleFunctions/backup/butfr/<folder>", methods = ["GET"])
+def backupfr(folder):
+    path = ""
+    for i in folder.split("|"):
+        path += i + "/"
+    path = path.removesuffix("/")
+    if request.method == "GET" and request.args["passw"] == password:
+        backupFile("./static/"+path)
+        return "Backup successful👍"
+    return "Wrong password i think"
+@app.route("/SuperSimpleFunctions/downloadbackup/<folder>", methods = ["GET"])
+def downbackup(folder):
+    path = ""
+    for i in folder.split("|"):
+        path += i + "/"
+    path = path.removesuffix("/")
+    i = path.split("/")[len(path.split("/"))-1]
+    if request.method == "GET" and request.args["passw"] == password:
+        if len(i.split(".")[:len(i.split("."))-2]) < 2:
+            return send_file("./static/"+path, download_name=i.split(".")[:len(i.split("."))-2][0], as_attachment=True)
+        else:
+            return send_file("./static/"+path, download_name=i.split(".")[:len(i.split("."))-2][0]+"."+i.split(".")[:len(i.split("."))-2][1], as_attachment=True)
+    return "Wrong password i think"
 
 app.run("0.0.0.0", 12345, debug=True)
