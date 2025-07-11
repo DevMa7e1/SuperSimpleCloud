@@ -1,5 +1,5 @@
 from flask import Flask, request, send_file
-import os, reedsolo, time
+import os, reedsolo, time, hashlib
 from Crypto.Cipher import AES
 
 app = Flask(__name__)
@@ -36,31 +36,36 @@ configs = {}
 for i in cffg.split("\n"):
     configs[i.split(":")[0]] = i.split(":")[1].split(",")
 
-def padKey(key : str):
-    for i in range(len(key), 16):
-        key += " "
-    return key
+def padKey(key : str, salt = os.urandom(8)):
+    return hashlib.pbkdf2_hmac("sha-512", key.encode(), salt, 1000000, 16), salt
 def AESEncrypt(data : bytes, key : str):
-    aes = AES.new(padKey(key).encode(), AES.MODE_EAX)
-    return aes.encrypt(data)
-def AESDecrypt(gibb : bytes, key : str):
-    aes = AES.new(padKey(key).encode(), AES.MODE_EAX)
-    return aes.decrypt(gibb)
+    hash, salt = padKey(key)
+    aes = AES.new(hash, AES.MODE_EAX)
+    gibb, tag = aes.encrypt_and_digest(data)
+    return gibb, tag, aes.nonce, salt
+def AESDecrypt(gibb : bytes, key : str, nonce, tag, salt):
+    hash, salt = padKey(key, salt)
+    aes = AES.new(hash, AES.MODE_EAX, nonce=nonce)
+    return aes.decrypt_and_verify(gibb, tag)
 def fileAESEncrypt(file, key):
     f = open(file, 'rb')
     r = AESEncrypt(f.read(), key)
     f.close()
     f = open(file+".naes", 'wb')
-    f.write(r)
+    f.write(r[3]+r[2]+r[1]+r[0])
     f.close()
 def fileAESDecrypt(file, key):
     f = open(file+".naes", 'rb')
-    r = AESEncrypt(f.read(), key)
+    salt = f.read(8)
+    nonce = f.read(16)
+    tag = f.read(16)
+    gibb = f.read()
+    r = AESDecrypt(gibb, key, nonce, tag, salt)
     f.close()
     f = open("./static/temp", 'wb')
     f.write(r)
     f.close()
-    return send_file("./static/temp", download_name=file, as_attachment=True)
+    return send_file("./static/temp", download_name=file.split("/")[len(file.split("/"))-1], as_attachment=True)
 
 def readChunks(file, chunk_size=255-int(configs["reedsolo"][0])):
     global configs
@@ -146,20 +151,20 @@ def getFiles( folder = "files"):
                 retrn += "<h2 style='color: white'>"
                 retrn += f"{i}</h2>\n"
             elif i.split('.')[len(i.split("."))-1] == "naes":
-                retrn += f"<a href='/SuperSimpleFunctions/AES/decrypt_interface/{folder.replace("/", "|")}{i.replace("/", "|").replace(".naes", '')}?passw={password}'>"
+                retrn += f"<a href='/SuperSimpleFunctions/AES/decrypt_interface/{folder.replace('/', '|')}{i.replace('/', '|').replace('.naes', '')}?passw={password}'>"
                 retrn += "<h2 style='color: lime'>"
-                retrn += f"{i.replace(".naes", "")}</h2>\n"
+                retrn += f"{i.replace('.naes', '')}</h2>\n"
             elif i.split('.')[len(i.split("."))-1] == "reso":
-                retrn += f"<a href='/SuperSimpleFunctions/recovery/{folder.replace("/", "|")}{i.replace(".reso", '')}?passw={password}'>"
+                retrn += f"<a href='/SuperSimpleFunctions/recovery/{folder.replace('/', '|')}{i.replace('.reso', '')}?passw={password}'>"
                 retrn += "<h2 style='color: lightblue'>"
-                retrn += f"{i.replace(".reso", "")}</h2>\n"
+                retrn += f"{i.replace('.reso', '')}</h2>\n"
             elif i.split('.')[len(i.split("."))-1] == "back":
-                retrn += f"<a href='/SuperSimpleFunctions/downloadbackup/{folder.replace("/", "|")}{i.replace("/", "|")}?passw={password}' download>"
+                retrn += f"<a href='/SuperSimpleFunctions/downloadbackup/{folder.replace('/', '|')}{i.replace('/', '|')}?passw={password}' download>"
                 retrn += "<h2 style='color: lightgray'>"
-                retrn += f"{i.replace(".back", "")}</h2>\n"
+                retrn += f"{i.replace('.back', '')}</h2>\n"
             
         else:
-            retrn += f"<a href='/{folder.replace("/", "|")}{i}?passw={password}'>"
+            retrn += f"<a href='/{folder.replace('/', '|')}{i}?passw={password}'>"
             retrn += f"<h2 style='color: orange'>{i}</h2>"
         
         retrn += "</a>"
@@ -169,7 +174,7 @@ def getFilesButDelete(folder = "files"):
     files = os.listdir("./static/"+folder)
     retrn = ""
     for i in files:
-        retrn += f"<a href='/SuperSimpleFunctions/delete/butfr/{folder.replace("/", "|")}|{i}?passw={password}'>"
+        retrn += f"<a href='/SuperSimpleFunctions/delete/butfr/{folder.replace('/', '|')}|{i}?passw={password}'>"
         retrn += "<h2 style='color: red'>"
         retrn += f"{i}</h2>\n"
         retrn += "</a>"
@@ -179,7 +184,7 @@ def getFilesButSetupRecovery(folder = "files"):
     retrn = ""
     for i in files:
         if os.path.isfile(f"./static/{folder}/{i}"):
-            retrn += f"<a href='/SuperSimpleFunctions/setuprecovery/butfr/{folder.replace("/", "|")}|{i}?passw={password}'>"
+            retrn += f"<a href='/SuperSimpleFunctions/setuprecovery/butfr/{folder.replace('/', '|')}|{i}?passw={password}'>"
             retrn += "<h2 style='color: lightblue'>"
             retrn += f"{i}</h2>\n"
             retrn += "</a>"
@@ -189,7 +194,7 @@ def getFilesButSetupBackup(folder = "files"):
     retrn = ""
     for i in files:
         if os.path.isfile(f"./static/{folder}/{i}"):
-            retrn += f"<a href='/SuperSimpleFunctions/backup/butfr/{folder.replace("/", "|")}|{i}?passw={password}'>"
+            retrn += f"<a href='/SuperSimpleFunctions/backup/butfr/{folder.replace('/', '|')}|{i}?passw={password}'>"
             retrn += "<h2 style='color: yellow'>"
             retrn += f"{i}</h2>\n"
             retrn += "</a>"
@@ -199,7 +204,7 @@ def getFilesButRename(folder = "files"):
     retrn = ""
     for i in files:
         if os.path.isfile(f"./static/{folder}/{i}"):
-            retrn += f"<a href='/SuperSimpleFunctions/rename/interface/{folder.replace("/", "|")}|{i}?passw={password}'>"
+            retrn += f"<a href='/SuperSimpleFunctions/rename/interface/{folder.replace('/', '|')}|{i}?passw={password}'>"
             retrn += "<h2 style='color: white'>"
             retrn += f"{i}</h2>\n"
             retrn += "</a>"
@@ -209,7 +214,7 @@ def getFilesButEncrypt(folder = "files"):
     retrn = ""
     for i in files:
         if os.path.isfile(f"./static/{folder}/{i}"):
-            retrn += f"<a href='/SuperSimpleFunctions/AES/encrypt_interface/{folder.replace("/", "|")}|{i}?passw={password}'>"
+            retrn += f"<a href='/SuperSimpleFunctions/AES/encrypt_interface/{folder.replace('/', '|')}|{i}?passw={password}'>"
             retrn += "<h2 style='color: green'>"
             retrn += f"{i}</h2>\n"
             retrn += "</a>"
@@ -296,9 +301,9 @@ def navigate(folder : str):
     path = ""
     for i in folder.split("|"):
         path += i + "/"
-    path.removesuffix("/")
+    path.removesuffix('/')
     if request.method == "GET" and request.args["passw"] == password:
-        return f"{sample}<div class='mmmm'><h1>{path.removeprefix("files")}</h1>"+getFiles(path)+f"<a href='/SuperSimpleFunctions/upload/{folder}?passw={password}'><button>Upload here</button></a><a href='/SuperSimpleFunctions/delete/{path.replace("/", "|")}?passw={password}'><button>Delete here</button></a><a href='/SuperSimpleFunctions/setuprecovery/{path.removesuffix("/").replace("/", "|")}?passw={password}'><button>Set up recovery here</button></a><a href='/SuperSimpleFunctions/backup/{path.removesuffix("/").replace("/", "|")}?passw={password}'><button>Make a backup here</button></a><a href='/SuperSimpleFunctions/rename/{path.removesuffix("/").replace("/", "|")}?passw={password}'><button>Rename here</button></a><a href='/SuperSimpleFunctions/mkdir/{path.removesuffix("/").replace("/", "|")}?passw={password}'><button>New folder here</button></a><a href='/SuperSimpleFunctions/AES/interface/{path.removesuffix("/").replace("/", "|")}?passw={password}'><button>Encrypt here</button></a></div>"
+        return f"{sample}<div class='mmmm'><h1>{path.removeprefix('files')}</h1>"+getFiles(path)+f"<a href='/SuperSimpleFunctions/upload/{folder}?passw={password}'><button>Upload here</button></a><a href='/SuperSimpleFunctions/delete/{path.replace('/', '|')}?passw={password}'><button>Delete here</button></a><a href='/SuperSimpleFunctions/setuprecovery/{path.removesuffix('/').replace('/', '|')}?passw={password}'><button>Set up recovery here</button></a><a href='/SuperSimpleFunctions/backup/{path.removesuffix('/').replace('/', '|')}?passw={password}'><button>Make a backup here</button></a><a href='/SuperSimpleFunctions/rename/{path.removesuffix('/').replace('/', '|')}?passw={password}'><button>Rename here</button></a><a href='/SuperSimpleFunctions/mkdir/{path.removesuffix('/').replace('/', '|')}?passw={password}'><button>New folder here</button></a><a href='/SuperSimpleFunctions/AES/interface/{path.removesuffix('/').replace('/', '|')}?passw={password}'><button>Encrypt here</button></a></div>"
     if request.method == 'POST':
         if 'file' not in request.files:
             return "File not sent!"
@@ -307,44 +312,44 @@ def navigate(folder : str):
             return "No file selected!"
         if file and request.args["passw"] == password:
             filename = file.filename
-            file.save(f"./static/files{path.removeprefix("files")}"+str(filename))
+            file.save(f"./static/files{path.removeprefix('files')}"+str(filename))
             if(configs["autobackup"][0] == "1"):
-                backupFile(f"./static/files{path.removeprefix("files")}"+str(filename))
+                backupFile(f"./static/files{path.removeprefix('files')}"+str(filename))
             if(configs["autorecover"][0] == "1"):
-                setupRecoveryFile(f"./static/files{path.removeprefix("files")}"+str(filename))
+                setupRecoveryFile(f"./static/files{path.removeprefix('files')}"+str(filename))
             return "Yay file uploaded!"
     return "Wrong password i think"
 
 @app.route("/SuperSimpleFunctions/delete/butfr/<path>")
 def deletebutfr(path : str):
     if request.args["passw"] == password:
-        if os.path.isfile("./static/"+path.replace("|", "/")):
-            os.remove("./static/"+path.replace("|", "/"))
+        if os.path.isfile("./static/"+path.replace('|', '/')):
+            os.remove("./static/"+path.replace('|', '/'))
         else:
-            os.rmdir("./static/"+path.replace("|", "/"))
+            os.rmdir("./static/"+path.replace('|', '/'))
         return "File succesfully eliminated.<a href='/'><button>Go back to root</button></a>"
     return "Wrong password i think"
 @app.route("/SuperSimpleFunctions/delete/<path>")
 def delete(path : str):
     if request.args["passw"] == password:
-        path = path.replace("|", "/").removesuffix("/")
-        return f"{sample}<h1>What file to delete from {"/"+path.removeprefix("files").removeprefix("/")}?</h1>{getFilesButDelete(path)}"
+        path = path.replace('|', '/').removesuffix('/')
+        return f"{sample}<div class='mmmm' width=500><h1>What file to delete from {'/'+path.removeprefix('files').removeprefix('/')}?</h1>{getFilesButDelete(path)}</div>"
     return "Wrong password i think"
 @app.route("/SuperSimpleFunctions/setuprecovery/<folder>", methods = ["GET"])
 def setupRecovery(folder : str):
     path = ""
     for i in folder.split("|"):
         path += i + "/"
-    path = path.removesuffix("/")
+    path = path.removesuffix('/')
     if request.method == "GET" and request.args["passw"] == password:
-        return f"{sample}<div class='mmmm' width=500><h1>{path.removeprefix("files")}</h1>"+getFilesButSetupRecovery(path)+"</div>"
+        return f"{sample}<div class='mmmm' width=500><h1>What file to setup recovery for from {'/'+path.removeprefix('files').removeprefix('/')}?</h1>{getFilesButSetupRecovery(path)}</div>"
     return "Wrong password i think"
 @app.route("/SuperSimpleFunctions/setuprecovery/butfr/<folder>", methods = ["GET"])
 def recoveryfr(folder):
     path = ""
     for i in folder.split("|"):
         path += i + "/"
-    path = path.removesuffix("/")
+    path = path.removesuffix('/')
     if request.method == "GET" and request.args["passw"] == password:
         setupRecoveryFile("./static/"+path)
         return "Done👍"
@@ -354,7 +359,7 @@ def recovery(folder):
     path = ""
     for i in folder.split("|"):
         path += i + "/"
-    path = path.removesuffix("/")
+    path = path.removesuffix('/')
     if request.method == "GET" and request.args["passw"] == password:
         results = recoverFile("./static/"+path)
         return f"I tried to recover your file! Chunks recovered: {int(results[0])} Broken chunks: {int(results[1])}"
@@ -364,16 +369,16 @@ def backup(folder):
     path = ""
     for i in folder.split("|"):
         path += i + "/"
-    path = path.removesuffix("/")
+    path = path.removesuffix('/')
     if request.method == "GET" and request.args["passw"] == password:
-        return sample+"<div class='mmmm' width=500><h1>"+getFilesButSetupBackup(path)+"</div>"
+        return f"{sample}<div class='mmmm' width=500><h1>What file to backup from {'/'+path.removeprefix('files').removeprefix('/')}?</h1>{getFilesButSetupBackup(path)}</div>"
     return "Wrong password i think"
 @app.route("/SuperSimpleFunctions/backup/butfr/<folder>", methods = ["GET"])
 def backupfr(folder):
     path = ""
     for i in folder.split("|"):
         path += i + "/"
-    path = path.removesuffix("/")
+    path = path.removesuffix('/')
     if request.method == "GET" and request.args["passw"] == password:
         backupFile("./static/"+path)
         return "Backup successful👍"
@@ -383,7 +388,7 @@ def downbackup(folder):
     path = ""
     for i in folder.split("|"):
         path += i + "/"
-    path = path.removesuffix("/")
+    path = path.removesuffix('/')
     i = path.split("/")[len(path.split("/"))-1]
     if request.method == "GET" and request.args["passw"] == password:
         if len(i.split(".")[:len(i.split("."))-2]) < 2:
@@ -396,16 +401,16 @@ def renam(folder):
     path = ""
     for i in folder.split("|"):
         path += i + "/"
-    path = path.removesuffix("/")
+    path = path.removesuffix('/')
     if request.method == "GET" and request.args["passw"] == password:
-        return sample+"<div class='mmmm' width=500><h1>"+getFilesButRename(path)+"</div>"
+        return f"{sample}<div class='mmmm' width=500><h1>What file to rename from {'/'+path.removeprefix('files').removeprefix('/')}?</h1>{getFilesButRename(path)}</div>"
     return "Wrong password i think"
 @app.route("/SuperSimpleFunctions/rename/interface/<folder>", methods = ["GET"])
 def renamee(folder):
     path = ""
     for i in folder.split("|"):
         path += i + "/"
-    path = path.removesuffix("/")
+    path = path.removesuffix('/')
     i = path.split("/")[len(path.split("/"))-1]
     if request.method == "GET" and request.args["passw"] == password:
         return """<!DOCTYPE html>
@@ -442,7 +447,7 @@ def renamefr(folder):
     path = ""
     for i in folder.split("|"):
         path += i + "/"
-    path = "./static/"+path.removesuffix("/")
+    path = "./static/"+path.removesuffix('/')
     if request.method == "GET" and request.args["passw"] == password:
         newpath = ""
         for j in path.split("/")[:len(path.split("/"))-1]:
@@ -455,7 +460,7 @@ def mkdir(folder):
     path = ""
     for i in folder.split("|"):
         path += i + "/"
-    path = path.removesuffix("/")
+    path = path.removesuffix('/')
     if request.method == "GET" and request.args["passw"] == password:
         return """<!DOCTYPE html>
 <html><head>
@@ -491,7 +496,7 @@ def mkdirfr(folder):
     path = ""
     for i in folder.split("|"):
         path += i + "/"
-    path = path.removesuffix("/")
+    path = path.removesuffix('/')
     if request.method == "GET" and request.args["passw"] == password:
         os.mkdir("./static/"+path+"/"+request.args["name"])
         return "New folder created👍"
@@ -501,16 +506,16 @@ def aesinterface(folder):
     path = ""
     for i in folder.split("|"):
         path += i + "/"
-    path = path.removesuffix("/")
+    path = path.removesuffix('/')
     if request.method == "GET" and request.args["passw"] == password:
-        return sample+"<div class='mmmm' width=500><h1>"+getFilesButEncrypt(path)+"</div>"
+        return f"{sample}<div class='mmmm' width=500><h1>What file to encrypt from {'/'+path.removeprefix('files').removeprefix('/')}?</h1>{getFilesButEncrypt(path)}</div>"
     return "Wrong password i think"
 @app.route("/SuperSimpleFunctions/AES/encrypt_interface/<folder>", methods = ["GET"])
 def aesencrypt(folder):
     path = ""
     for i in folder.split("|"):
         path += i + "/"
-    path = path.removesuffix("/")
+    path = path.removesuffix('/')
     if request.method == "GET" and request.args["passw"] == password:
         return """<!DOCTYPE html>
 <html><head>
@@ -546,7 +551,7 @@ def aesencrypty(folder):
     path = ""
     for i in folder.split("|"):
         path += i + "/"
-    path = path.removesuffix("/")
+    path = path.removesuffix('/')
     if request.method == "GET" and request.args["passw"] == password:
         fileAESEncrypt("./static/"+path, request.args["key"])
         return "File encrypted👍"
@@ -556,7 +561,7 @@ def aesdecrypt(folder):
     path = ""
     for i in folder.split("|"):
         path += i + "/"
-    path = path.removesuffix("/")
+    path = path.removesuffix('/')
     if request.method == "GET" and request.args["passw"] == password:
         return """<!DOCTYPE html>
 <html><head>
@@ -592,7 +597,7 @@ def aesdecrypty(folder):
     path = ""
     for i in folder.split("|"):
         path += i + "/"
-    path = path.removesuffix("/")
+    path = path.removesuffix('/')
     if request.method == "GET" and request.args["passw"] == password:
         return fileAESDecrypt("./static/"+path, request.args["key"])
     return "Wrong password i think"
