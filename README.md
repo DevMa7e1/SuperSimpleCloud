@@ -4,6 +4,13 @@ Got some flash drives sitting around doing nothing? Use them as a way to get fre
 
 **⚠️Please also keep in mind that this not very secure and should not be used for storing sensitive information.⚠️**
 
+## How to set up Super Simple Cloud
+1. Download the install.sh script with `wget https://raw.githubusercontent.com/DevMa7e1/SuperSimpleCloud/refs/heads/main/install.sh`
+2. Run the command `chmod +x install.sh` to make the file executable
+3. Run the file `./install.sh` **and you're done!** <sup>very simple indeed</sup>
+
+#### To run Super Simple Cloud after closing it, you can just type the command `./start.sh` from inside the SuperSimpleCloud-main folder.
+
 ## Things you might want to know about Super Simple Cloud
 
 1. **Different colored items are different things**<br>
@@ -35,5 +42,5 @@ If you are using Reed Solomon based backups, please keep in mind that they are v
 5. **Don't store sensitive information without encrypting it**
 
 Don't store any sensitive information on a cloud running Super Simple Cloud! But, if you insist, make sure to encrypt the file containing the sensitive information then <span style="color: red;">
-**delete the original**</span> (white colored one).
+**delete the original**</span> (white colored one). <sup>Actually the AES encryption is pretty strong, if you use a good password!</sup>
 
