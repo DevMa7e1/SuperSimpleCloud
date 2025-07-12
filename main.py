@@ -29,21 +29,20 @@ recoverlocation: .""")
 f = open("sample.html")
 sample = f.read()
 f.close()
-
-f = open("PASSWORD")
-password = f.read()
-f.close()
-
 configs = {}
+password = "password"
 
 def loadConfig():
-    global configs
+    global configs, password
     f = open("setup.txt")
     cffg = f.read().replace(" ", "").removesuffix("\n")
     f.close()
     configs = {}
     for i in cffg.split("\n"):
         configs[i.split(":")[0]] = i.split(":")[1].split(",")
+    f = open("PASSWORD")
+    password = f.read()
+    f.close()
 loadConfig()
 
 def padKey(key : str, salt = os.urandom(8)):
