@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Super Simple Cloud First Setup</title>
+        <style>
+        body{
+            font-family: 'Lucida Sans', 'Lucida Sans Regular', 'Lucida Grande', 'Lucida Sans Unicode', Geneva, Verdana, sans-serif;
+        }
+        a:link {
+            text-decoration: none;
+        }
+        a:visited {
+            text-decoration: none;
+        }
+        button{
+            font-size: 30px;
+            border-width: 3px;
+            border-radius: 25px;
+        }
+        .mmmm{
+            border-width: 5px;
+            border-radius: 30px;
+            border-style: solid;
+            background-color: cornflowerblue;
+            width: 700px;
+        }
+        h2{
+            font-size: 40px;
+        }
+        .smol{
+            font-size: 10px;
+        }
+    </style>
+    </head>
+    <body>
+        <div class="mmmm">
+            <h1>Welcome to Super Simple Cloud!</h1>
+            <p>To be able to use Super Simple cloud, you first have to adjust some settings.</p>
+            <form action="/first-setup">
+                <label>Cloud's password:</label>
+                <input type="password" name="passw" id="passw"></input>
+                <p class="smol">You should set up auto-backup if you plan to store important files.</p>
+                <label>Auto-backup</label>
+                <input type="checkbox" name="backup" id="backup">
+                <p class="smol">You should set up auto-recovery if you plan to store small files on flash drives/SD cards.</p>
+                <label>Auto-recovery</label>
+                <input type="checkbox" name="recovery" id="recovery">
+                <p class="smol">You should change the backup/recovery location if using a flash drive and/or SD card for storage. Default: .</p>
+                <label>Backup location</label>
+                <input type="text" name="backupl" id="backupl" value=".">
+                <label>Recovery location</label>
+                <input type="text" name="recoveryl" id="recoveryl" value=".">
+                <p class="smol">You should change the Reed Solomon nysm to a smaller power of two if you plan to store big files.</p>
+                <label>Reed Solomon nysm</label>
+                <input type="number" name="nysm" id="nysm" value="32"><br><br>
+                <input type="submit" value="All done!" style="font-size: 30px;">
+            </form>
+            <br>
+        </div>
+    </body>
+</html>

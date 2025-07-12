@@ -1,4 +1,4 @@
-from flask import Flask, request, send_file
+from flask import Flask, request, send_file, redirect
 import os, reedsolo, time, hashlib
 from Crypto.Cipher import AES
 
@@ -16,7 +16,12 @@ if __name__ == "__main__":
         f = open("setup.txt", 'w')
         f.write("""reedsolo: 32
 autorecover: 1
-autobackup: 0""")
+autobackup: 0
+backuplocation: .
+recoverlocation: .""")
+        x = open("first", 'w')
+        x.write("Finish first setup!")
+        x.close()
         f.close()
 
 
@@ -29,12 +34,17 @@ f = open("PASSWORD")
 password = f.read()
 f.close()
 
-f = open("setup.txt")
-cffg = f.read().replace(" ", "")
-f.close()
 configs = {}
-for i in cffg.split("\n"):
-    configs[i.split(":")[0]] = i.split(":")[1].split(",")
+
+def loadConfig():
+    global configs
+    f = open("setup.txt")
+    cffg = f.read().replace(" ", "").removesuffix("\n")
+    f.close()
+    configs = {}
+    for i in cffg.split("\n"):
+        configs[i.split(":")[0]] = i.split(":")[1].split(",")
+loadConfig()
 
 def padKey(key : str, salt = os.urandom(8)):
     return hashlib.pbkdf2_hmac("sha-512", key.encode(), salt, 1000000, 16), salt
@@ -112,40 +122,92 @@ def ReedDecode(reeds, chunks):
     return correct, recovered, broken
 
 def backupFile(file):
-    a = open(file, 'rb')
-    b = open(file+f".{str(round(time.time()))}.back", 'wb')
-    b.write(a.read())
-    a.close()
-    b.close()
-
+    global configs
+    if configs["backuplocation"][0] == ".":
+        a = open(file, 'rb')
+        b = open(file+f".{str(round(time.time()))}.back", 'wb')
+        b.write(a.read())
+        a.close()
+        b.close()
+    else:
+        a = open(file, 'rb')
+        path = configs['backuplocation'][0]+'/'+file.split('/')[len(file.split('/'))-1]+f".{str(round(time.time()))}.back"
+        b = open(path, 'wb')
+        b.write(a.read())
+        a.close()
+        b.close()
+        try:
+            x = open('DBnR', 'x')
+            x.close()
+        except:
+            pass
+        x = open('DBnR', 'a')
+        x.write(f"\n{file} -> {path}")
+        x.close()
 def setupRecoveryFile(file):
     global configs
-    z = open(file+".reso", 'wb')
-    bstr = b""
-    j = 0
-    for i in ReedEncode(readChunks(file)):
-        print(f"Saving chunk {str(j)} of file {file}.", end="\r")
-        j += 1
-        bstr += i
-    z.write(bstr)
-    z.close()
-    print()
+    if configs["recoverlocation"][0] == ".":
+        z = open(file+".reso", 'wb')
+        bstr = b""
+        j = 0
+        for i in ReedEncode(readChunks(file)):
+            print(f"Saving chunk {str(j)} of file {file}.", end="\r")
+            j += 1
+            bstr += i
+        z.write(bstr)
+        z.close()
+        print()
+    else:
+        z = open(configs["recoverlocation"][0]+"/"+file.split("/")[len(file.split("/"))-1]+".reso", 'wb')
+        bstr = b""
+        j = 0
+        for i in ReedEncode(readChunks(file)):
+            print(f"Saving chunk {str(j)} of file {file}.", end="\r")
+            j += 1
+            bstr += i
+        z.write(bstr)
+        z.close()
+        try:
+            x = open('DBnR', 'x')
+            x.close()
+        except:
+            pass
+        x = open('DBnR', 'a')
+        x.write(f"\n{file} -> {configs['recoverlocation'][0]+'/'+file.split('/')[len(file.split('/'))-1]+'.reso'}")
+        x.close()
+        print()
 def recoverFile(file):
     global configs
-    vars = ReedDecode(readChunks(file+".reso", int(configs["reedsolo"][0])), readChunks(file))
-    recovery = vars[0]
-    if recovery != "":
-        x = open(file, "wb")
-        x.write(recovery)
+    if configs["recoverlocation"][0] == ".":
+        vars = ReedDecode(readChunks(file+".reso", int(configs["reedsolo"][0])), readChunks(file))
+        recovery = vars[0]
+        if recovery != "":
+            x = open(file, "wb")
+            x.write(recovery)
+            x.close()
+        return vars[1], vars[2]
+    else:
+        x = open("DBnR")
+        r = x.read().removeprefix("\n").removesuffix("\n").split("\n")
         x.close()
-    return vars[1], vars[2]
+        register = {}
+        for item in r:
+            register[item.split(" -> ")[0]] = item.split(" -> ")[1]
+        vars = ReedDecode(readChunks(file, int(configs["reedsolo"][0])), readChunks(list(register.keys())[list(register.values()).index(file)]))
+        recovery = vars[0]
+        if recovery != "":
+            x = open(file, "wb")
+            x.write(recovery)
+            x.close()
+        return vars[1], vars[2]
 
-def getFiles( folder = "files"):
+def getFiles( folder = "files", add = "./static/"):
     global password
-    files = os.listdir("./static/"+folder)
+    files = os.listdir(add+folder)
+    fold = add+folder
     retrn = ""
     for i in files:
-        if os.path.isfile(f"./static/{folder}/{i}"):
+        if os.path.isfile(f"{fold}/{i}"):
             if i.split('.')[len(i.split("."))-1] != "reso" and i.split('.')[len(i.split("."))-1] != "back" and i.split('.')[len(i.split("."))-1] != "naes":
                 retrn += f"<a href='/static/{folder}/{i}?passw={password}' download>"
                 retrn += "<h2 style='color: white'>"
@@ -167,6 +229,23 @@ def getFiles( folder = "files"):
             retrn += f"<a href='/{folder.replace('/', '|')}{i}?passw={password}'>"
             retrn += f"<h2 style='color: orange'>{i}</h2>"
         
+        retrn += "</a>"
+    return retrn
+def getFilesButDBnR(folder):
+    global password
+    files = os.listdir(folder)
+    fold = folder
+    retrn = ""
+    for i in files:
+        if os.path.isfile(f"{fold}/{i}"):
+            if i.split('.')[len(i.split("."))-1] == "reso":
+                retrn += f"<a href='/SuperSimpleFunctions/DBnR/recovery/{i.replace('/', '|')}?passw={password}'>"
+                retrn += "<h2 style='color: lightblue'>"
+                retrn += f"{i.replace('.reso', '')}</h2>\n"
+            elif i.split('.')[len(i.split("."))-1] == "back":
+                retrn += f"<a href='/SuperSimpleFunctions/DBnR/backup/{i.replace('/', '|')}?passw={password}'>"
+                retrn += "<h2 style='color: lightgray'>"
+                retrn += f"{i.replace('.back', '')}</h2>\n"
         retrn += "</a>"
     return retrn
 
@@ -225,10 +304,84 @@ def renameFile(path, path2):
 
 @app.route("/", methods=["GET", "POST"])
 def auth():
-    f = open('password.html')
-    r = f.read()
-    f.close()
-    return r
+    if not os.path.exists("first"):
+        f = open('password.html')
+        r = f.read()
+        f.close()
+        return r
+    else:
+        f = open("first-setup.html")
+        r = f.read()
+        f.close()
+        return r
+@app.route("/first-setup")
+def first():
+    if os.path.exists("first"):
+        autor = request.args["recovery"] == "on"
+        autob = request.args["backup"] == "on"
+        rpath = request.args["recoveryl"]
+        bpath = request.args["backupl"]
+        passwor = request.args["passw"]
+        nysm = request.args["nysm"]
+        ar = 0
+        ab = 0
+        if autor == True:
+            ar = "1"
+        if autob == True:
+            ab = "1"
+        f = open("setup.txt", 'w')
+        f.write(f"""reedsolo: {nysm}
+autorecover: {ar}
+autobackup: {ab}
+backuplocation: {bpath}
+recoverlocation: {rpath}""")
+        f.close()
+        f = open("PASSWORD", 'w')
+        f.write(passwor)
+        f.close()
+        os.remove("first")
+        loadConfig()
+        return redirect("/")
+    else:
+        return "No no no you have already done the first setup silly!"
+@app.route("/settingup")
+def settingup():
+    if password == request.args["passw"]:
+        if len(request.args) > 1:
+            try:
+                autor = request.args["recovery"]
+                ar = "1"
+            except:
+                ar = "0"
+            try:
+                autob = request.args["backup"] == "on"
+                ab = "1"
+            except:
+                ab = "0"
+            rpath = request.args["recoveryl"]
+            bpath = request.args["backupl"]
+            passwor = request.args["npassw"]
+            nysm = request.args["nysm"]
+            f = open("setup.txt", 'w')
+            f.write(f"""reedsolo: {nysm}
+autorecover: {ar}
+autobackup: {ab}
+backuplocation: {bpath}
+recoverlocation: {rpath}""")
+            f.close()
+            f = open("PASSWORD", 'w')
+            f.write(passwor)
+            f.close()
+            loadConfig()
+            return redirect("/")
+        else:
+            f = open("settings.html")
+            r = f.read()
+            f.close()
+            return r
+    else:
+        return "Wrong password maybe?"
+
 @app.route("/SuperSimpleFunctions/upload/<path>")
 def upload(path : str):
     return """
@@ -303,7 +456,10 @@ def navigate(folder : str):
         path += i + "/"
     path.removesuffix('/')
     if request.method == "GET" and request.args["passw"] == password:
-        return f"{sample}<div class='mmmm'><h1>{path.removeprefix('files')}</h1>"+getFiles(path)+f"<a href='/SuperSimpleFunctions/upload/{folder}?passw={password}'><button>Upload here</button></a><a href='/SuperSimpleFunctions/delete/{path.replace('/', '|')}?passw={password}'><button>Delete here</button></a><a href='/SuperSimpleFunctions/setuprecovery/{path.removesuffix('/').replace('/', '|')}?passw={password}'><button>Set up recovery here</button></a><a href='/SuperSimpleFunctions/backup/{path.removesuffix('/').replace('/', '|')}?passw={password}'><button>Make a backup here</button></a><a href='/SuperSimpleFunctions/rename/{path.removesuffix('/').replace('/', '|')}?passw={password}'><button>Rename here</button></a><a href='/SuperSimpleFunctions/mkdir/{path.removesuffix('/').replace('/', '|')}?passw={password}'><button>New folder here</button></a><a href='/SuperSimpleFunctions/AES/interface/{path.removesuffix('/').replace('/', '|')}?passw={password}'><button>Encrypt here</button></a></div>"
+        magic_variable = ""
+        if configs["backuplocation"][0] != "." or configs["recoverlocation"][0] != ".":
+            magic_variable = f"<a href='/SuperSimpleFunctions/DBnR?passw={password}'><button>View backups and/or recovery files</button></a>"
+        return f"{sample}<div class='mmmm'><h1>{path.removeprefix('files')}</h1>"+getFiles(path)+f"<a href='/SuperSimpleFunctions/upload/{folder}?passw={password}'><button>Upload here</button></a><a href='/SuperSimpleFunctions/delete/{path.replace('/', '|')}?passw={password}'><button>Delete here</button></a><a href='/SuperSimpleFunctions/setuprecovery/{path.removesuffix('/').replace('/', '|')}?passw={password}'><button>Set up recovery here</button></a><a href='/SuperSimpleFunctions/backup/{path.removesuffix('/').replace('/', '|')}?passw={password}'><button>Make a backup here</button></a><a href='/SuperSimpleFunctions/rename/{path.removesuffix('/').replace('/', '|')}?passw={password}'><button>Rename here</button></a><a href='/SuperSimpleFunctions/mkdir/{path.removesuffix('/').replace('/', '|')}?passw={password}'><button>New folder here</button></a><a href='/SuperSimpleFunctions/AES/interface/{path.removesuffix('/').replace('/', '|')}?passw={password}'><button>Encrypt here</button></a>{magic_variable}<a href=/settingup?passw={password}><button class='material-symbols-outlined' style='font-size: 30px'>settings</button></a></div>"
     if request.method == 'POST':
         if 'file' not in request.files:
             return "File not sent!"
@@ -601,4 +757,65 @@ def aesdecrypty(folder):
     if request.method == "GET" and request.args["passw"] == password:
         return fileAESDecrypt("./static/"+path, request.args["key"])
     return "Wrong password i think"
+@app.route("/SuperSimpleFunctions/DBnR", methods = ["GET"])
+def dbnr():
+    global configs
+    if request.method == "GET" and request.args["passw"] == password:
+        if configs["backuplocation"] != "." or configs["recoverlocation"] != ".":
+            return f"{sample}<div class='mmmm' width=500><h1>Which one?</h1><a href='/SuperSimpleFunctions/DBnR/b?passw={password}'><button>Backups</button></a><br><a href='/SuperSimpleFunctions/DBnR/r?passw={password}'><button>Recovery</button></a></div>"
+    return "Wrong password i think"
+@app.route("/SuperSimpleFunctions/DBnR/b", methods = ["GET"])
+def dbnrb():
+    global configs
+    if request.method == "GET" and request.args["passw"] == password:
+        if configs["backuplocation"][0] != ".":
+            return f"{sample}<div class='mmmm' width=500><h1>Backups</h1>{getFilesButDBnR(configs['backuplocation'][0])}</div>"
+        else:
+            return redirect(f"/SuperSimpleFunctions/DBnR?passw={password}")
+    else:
+        return "Wrong password i think"
+@app.route("/SuperSimpleFunctions/DBnR/r", methods = ["GET"])
+def dbnrr():
+    global configs
+    if request.method == "GET" and request.args["passw"] == password:
+        if configs["recoverlocation"][0] != ".":
+            return f"{sample}<div class='mmmm' width=500><h1>Backups</h1>{getFilesButDBnR(configs['recoverlocation'][0])}</div>"
+        else:
+            return redirect(f"/SuperSimpleFunctions/DBnR?passw={password}")
+    else:
+        return "Wrong password i think"
+@app.route("/SuperSimpleFunctions/DBnR/backup/<folder>", methods = ["GET"])
+def dbnrbackups(folder):
+    global configs
+    if request.method == "GET" and request.args["passw"] == password:
+        if configs["backuplocation"][0] != ".":
+            x = open("DBnR")
+            r = x.read().removeprefix("\n").removesuffix("\n").split("\n")
+            x.close()
+            register = {}
+            for item in r:
+                register[item.split(" -> ")[0]] = item.split(" -> ")[1]
+            name = list(register.keys())[list(register.values()).index(configs["backuplocation"][0]+"/"+folder)]
+            return send_file(configs["backuplocation"][0]+"/"+folder, as_attachment=True, download_name=name.split("/")[len(name.split("/"))-1])
+        else:
+            return redirect(f"/SuperSimpleFunctions/DBnR?passw={password}")
+    else:
+        return "Wrong password i think"
+@app.route("/SuperSimpleFunctions/DBnR/recovery/<folder>", methods = ["GET"])
+def dbnrrecovery(folder):
+    global configs
+    if request.method == "GET" and request.args["passw"] == password:
+        if configs["backuplocation"][0] != ".":
+            x = open("DBnR")
+            r = x.read().removeprefix("\n").removesuffix("\n").split("\n")
+            x.close()
+            register = {}
+            for item in r:
+                register[item.split(" -> ")[0]] = item.split(" -> ")[1]
+            ok, notok = recoverFile(configs["recoverlocation"][0]+"/"+folder)
+            return f"File recovered! Ok chunks: {ok}, Broken chunks {notok}."
+        else:
+            return redirect(f"/SuperSimpleFunctions/DBnR?passw={password}")
+    else:
+        return "Wrong password i think"
 app.run("0.0.0.0", 12345, debug=True)
