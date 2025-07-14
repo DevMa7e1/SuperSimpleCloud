@@ -5,11 +5,14 @@ Got some flash drives sitting around doing nothing? Use them as a way to get fre
 **⚠️Please also keep in mind that this not very secure and should not be used for storing sensitive information.⚠️**
 
 ## How to set up Super Simple Cloud
+If you are on a Debian based linux distro:
 1. Download the install.sh script with `wget https://raw.githubusercontent.com/DevMa7e1/SuperSimpleCloud/refs/heads/main/install.sh`
 2. Run the command `chmod +x install.sh` to make the file executable
 3. Run the file `./install.sh` **and you're done!** <sup>very simple indeed</sup>
 
 #### To run Super Simple Cloud after closing it, you can just type the command `./start.sh` from inside the SuperSimpleCloud-main folder.
+
+If you are using a non Debian based distro or Windows, [**check out the how2install guide**](https://github.com/DevMa7e1/SuperSimpleCloud/blob/main/how2install.md).
 
 ## Things you might want to know about Super Simple Cloud
 
