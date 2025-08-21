@@ -1,4 +1,7 @@
-# How to install Super Simple Cloud
+# If you are trying to install Super Simple Cloud directly, please check out the instructions in the README file!
+<br><br>
+
+# How to install Super Simple Cloud from source
 If you are on Linux:
 
 Debian based distro:
