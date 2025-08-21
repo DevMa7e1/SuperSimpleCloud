@@ -2,7 +2,7 @@ from flask import Flask, request, send_file, redirect
 import os, reedsolo, time, hashlib
 from Crypto.Cipher import AES
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder=os.getcwd()+"/static")
 
 app.config['UPLOAD_FOLDER'] = "./static/files/"
 
