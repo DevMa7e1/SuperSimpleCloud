@@ -316,8 +316,14 @@ def auth():
 @app.route("/first-setup")
 def first():
     if os.path.exists("first"):
-        autor = request.args["recovery"] == "on"
-        autob = request.args["backup"] == "on"
+        if "recovery" in request.args:
+            autor = True
+        else:
+            autor = False
+        if "backup" in request.args:
+            autob = True
+        else:
+            autob = False
         rpath = request.args["recoveryl"]
         bpath = request.args["backupl"]
         passwor = request.args["passw"]
@@ -817,4 +823,4 @@ def dbnrrecovery(folder):
             return redirect(f"/SuperSimpleFunctions/DBnR?passw={password}")
     else:
         return "Wrong password i think"
-app.run("0.0.0.0", 12345, debug=True)
+app.run("0.0.0.0", 12345)

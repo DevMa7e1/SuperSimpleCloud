@@ -5,14 +5,15 @@ Got some flash drives sitting around doing nothing? Use them as a way to get fre
 **⚠️Please also keep in mind that this not very secure and should not be used for storing sensitive information.⚠️**
 
 ## How to set up Super Simple Cloud
-If you are on a Debian based linux distro:
-1. Download the install.sh script with `wget https://raw.githubusercontent.com/DevMa7e1/SuperSimpleCloud/refs/heads/main/install.sh`
-2. Run the command `chmod +x install.sh` to make the file executable
-3. Run the file `./install.sh` **and you're done!** <sup>very simple indeed</sup>
+1. Download the latest zip for your platform from Releases
+2. Unzip the zip file in the drive that you want to use for cloud storage
+3. Go into the resulting directory and run start-sscloud
 
-#### To run Super Simple Cloud after closing it, you can just type the command `./start.sh` from inside the SuperSimpleCloud-main folder.
+If you want to run Super Simple Cloud directly from its python code, [**check out the how2install guide**](https://github.com/DevMa7e1/SuperSimpleCloud/blob/main/how2install.md).
+## How to package Super Simple Cloud
+On Linux, to package Super Simple Cloud just run `pyinstaller main.py --paths="/home/(user)/.local/lib/python(ver)/site-packages/" -F` (replace (user) with your user's name and (ver) with your current version of python)
 
-If you are using a non Debian based distro or Windows, [**check out the how2install guide**](https://github.com/DevMa7e1/SuperSimpleCloud/blob/main/how2install.md).
+Make sure that you have all of the necessary libraries for Super Simple Cloud installed, otherwise the resulting executable won't work. They are pycryptodome, reedsolo, flask.
 
 ## Things you might want to know about Super Simple Cloud
 
@@ -40,10 +41,10 @@ If you are using a non Debian based distro or Windows, [**check out the how2inst
 
 4. **Reed Solomon based actions are slow**
 
-If you are using Reed Solomon based backups, please keep in mind that they are very slow when file size is bigger than 50MB and quite slow at 10MB-50MB. To speed up big files quite a bit, edit the reedsolo line in the setup.txt file to a smaller power of 2 (like 16, 8, 4 or 2). **Please keep in mind that reducing the reedsolo value decreases the ability to correct errors.** Also, for the impatient ones, you can check the live python server output for progress made on setting up and recovery. <sup>Thankfully this runs in the background so you can still interact with the cloud in the mean time.</sup>
+If you are using Reed Solomon based backups, please keep in mind that they are very slow when file size is bigger than 50MB and quite slow at 10MB-50MB. To speed up big files quite a bit, edit the reedsolo line in the setup.txt file to a smaller power of 2 (like 16, 8, 4 or 2). **Please keep in mind that reducing the reedsolo value decreases the ability to correct errors.** Also, for the impatient ones, you can check the live python server output for progress made on setting up and recovery. <sup>Thankfully this runs in the background so you can still interact with the cloud in the meantime.</sup>
 
 5. **Don't store sensitive information without encrypting it**
 
 Don't store any sensitive information on a cloud running Super Simple Cloud! But, if you insist, make sure to encrypt the file containing the sensitive information then <span style="color: red;">
-**delete the original**</span> (white colored one). <sup>Actually the AES encryption is pretty strong, if you use a good password!</sup>
+**delete the original**</span> (white colored one). <sup>Actually, the AES encryption is pretty strong, if you use a good password!</sup>
 
